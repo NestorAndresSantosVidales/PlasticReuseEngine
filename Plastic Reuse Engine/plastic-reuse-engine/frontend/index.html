@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plastic Reuse Engine</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="header-title">
+        <span class="header-icon" aria-hidden="true">♻</span>
+        <h1>Plastic Reuse Engine</h1>
+      </div>
+      <p class="header-subtitle">
+        Evaluate whether plastic waste may be reused for modular or non-structural applications
+      </p>
+    </div>
+    <button class="dark-toggle" id="darkToggle" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+  </header>
+
+  <main class="main-content">
+
+    <!-- Photo Capture / Upload -->
+    <section class="card" aria-labelledby="photo-heading">
+      <h2 id="photo-heading">1. Add a Photo <span class="optional-tag">optional</span></h2>
+      <div class="photo-actions">
+        <button class="btn btn-secondary" id="cameraBtn" type="button">
+          📷 Use Camera
+        </button>
+        <label class="btn btn-secondary" for="fileInput">
+          📁 Upload Image
+        </label>
+        <input type="file" id="fileInput" accept="image/*" aria-label="Upload image file" />
+      </div>
+      <div class="image-preview-wrap" id="imagePreviewWrap" hidden>
+        <img id="imagePreview" src="" alt="Preview of uploaded plastic item" />
+        <button class="btn btn-ghost btn-sm" id="clearImageBtn" type="button" aria-label="Remove image">
+          ✕ Remove
+        </button>
+      </div>
+      <p class="hint">Image is optional for MVP. Future versions will use it for automatic plastic type detection.</p>
+    </section>
+
+    <!-- Analysis Form -->
+    <section class="card" aria-labelledby="form-heading">
+      <h2 id="form-heading">2. Describe the Item</h2>
+      <form id="analysisForm" novalidate>
+
+        <div class="form-group">
+          <label for="plasticType">Plastic Type <span class="required" aria-hidden="true">*</span></label>
+          <select id="plasticType" name="plastic_type" required aria-required="true">
+            <option value="">— Select plastic type —</option>
+            <option value="PET">PET — Polyethylene Terephthalate</option>
+            <option value="HDPE">HDPE — High-Density Polyethylene</option>
+            <option value="PVC">PVC — Polyvinyl Chloride</option>
+            <option value="LDPE">LDPE — Low-Density Polyethylene</option>
+            <option value="PP">PP — Polypropylene</option>
+            <option value="PS">PS — Polystyrene</option>
+            <option value="OTHER">OTHER — Mixed / Category 7</option>
+            <option value="UNKNOWN">UNKNOWN — Not sure</option>
+          </select>
+          <span class="field-error" id="plasticTypeError" role="alert"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="sourceType">Source Object</label>
+          <select id="sourceType" name="source_type">
+            <option value="unknown">Unknown</option>
+            <option value="bottle">Bottle</option>
+            <option value="cap">Cap / Lid</option>
+            <option value="food_container">Food Container</option>
+            <option value="detergent_bottle">Detergent Bottle</option>
+            <option value="packaging_film">Packaging Film</option>
+            <option value="tray">Tray</option>
+            <option value="bag">Bag</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="contamination">Contamination Level <span class="required" aria-hidden="true">*</span></label>
+          <select id="contamination" name="contamination_level" required aria-required="true">
+            <option value="">— Select level —</option>
+            <option value="none">None — Clean item</option>
+            <option value="low">Low — Minor residue, easily cleaned</option>
+            <option value="medium">Medium — Visible residue or staining</option>
+            <option value="high">High — Heavily soiled or contaminated</option>
+          </select>
+          <span class="field-error" id="contaminationError" role="alert"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="washable">Can it be washed? <span class="required" aria-hidden="true">*</span></label>
+          <select id="washable" name="washable" required aria-required="true">
+            <option value="">— Select option —</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+            <option value="unknown">Unknown</option>
+          </select>
+          <span class="field-error" id="washableError" role="alert"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="intendedReuse">Intended Reuse <span class="required" aria-hidden="true">*</span></label>
+          <select id="intendedReuse" name="intended_reuse" required aria-required="true">
+            <option value="">— Select reuse type —</option>
+            <option value="modular_block">Modular Block</option>
+            <option value="decorative_piece">Decorative Piece</option>
+            <option value="non_structural_panel">Non-Structural Panel</option>
+            <option value="filament_candidate">Filament Candidate</option>
+            <option value="experimental_prototype">Experimental Prototype</option>
+          </select>
+          <span class="field-error" id="intendedReuseError" role="alert"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="notes">Notes <span class="optional-tag">optional</span></label>
+          <textarea id="notes" name="notes" rows="3" maxlength="500"
+            placeholder="Any observations about the item..."></textarea>
+        </div>
+
+        <button class="btn btn-primary btn-full" type="submit" id="analyzeBtn">
+          Analyze Item
+        </button>
+      </form>
+    </section>
+
+    <!-- Loading State -->
+    <div class="loading-state" id="loadingState" hidden aria-live="polite" aria-busy="true">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Analyzing plastic item...</p>
+    </div>
+
+    <!-- Error State -->
+    <div class="error-banner" id="errorBanner" hidden role="alert">
+      <span id="errorMessage"></span>
+      <button class="btn btn-ghost btn-sm" id="dismissError" type="button">Dismiss</button>
+    </div>
+
+    <!-- Results Section -->
+    <section class="card results-card" id="resultsSection" hidden aria-labelledby="results-heading" aria-live="polite">
+      <h2 id="results-heading">3. Analysis Result</h2>
+
+      <!-- Score + Verdict -->
+      <div class="score-row">
+        <div class="score-circle" id="scoreCircle" aria-label="Reuse score">
+          <span class="score-value" id="scoreValue">—</span>
+          <span class="score-label">/ 100</span>
+        </div>
+        <div class="verdict-block">
+          <span class="verdict-badge" id="verdictBadge">—</span>
+          <span class="confidence-label" id="confidenceLabel">—</span>
+          <p class="recommended-use" id="recommendedUse"></p>
+        </div>
+      </div>
+
+      <!-- Reasons -->
+      <div class="result-section">
+        <h3>Why this score?</h3>
+        <ul class="reason-list" id="reasonList"></ul>
+      </div>
+
+      <!-- Suggested Process -->
+      <div class="result-section">
+        <h3>Suggested Process</h3>
+        <ol class="process-list" id="processList"></ol>
+      </div>
+
+      <!-- Warnings -->
+      <div class="result-section warnings-section">
+        <h3>⚠ Warnings</h3>
+        <ul class="warning-list" id="warningList"></ul>
+      </div>
+
+      <!-- Disclaimer -->
+      <div class="disclaimer-box" id="disclaimerBox" role="note" aria-label="Safety disclaimer">
+        <strong>Disclaimer:</strong>
+        <p id="disclaimerText"></p>
+      </div>
+
+      <!-- Actions -->
+      <div class="result-actions">
+        <button class="btn btn-secondary" id="downloadBtn" type="button">⬇ Download Report (JSON)</button>
+        <button class="btn btn-ghost" id="newAnalysisBtn" type="button">+ New Analysis</button>
+      </div>
+    </section>
+
+    <!-- History -->
+    <section class="card history-card" id="historySection" hidden aria-labelledby="history-heading">
+      <h2 id="history-heading">Recent Analyses</h2>
+      <ul class="history-list" id="historyList"></ul>
+      <button class="btn btn-ghost btn-sm" id="clearHistoryBtn" type="button">Clear History</button>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <p>Plastic Reuse Engine — Decision support tool. Not a safety certification system.</p>
+  </footer>
+
+  <!-- Camera Modal -->
+  <div class="modal-overlay" id="cameraModal" role="dialog" aria-modal="true" aria-labelledby="cameraModalTitle" hidden>
+    <div class="modal">
+      <h2 id="cameraModalTitle">Take a Photo</h2>
+      <video id="cameraVideo" autoplay playsinline muted aria-label="Camera preview"></video>
+      <p id="cameraStatus" style="font-size:0.8rem;color:#6b7280;text-align:center;margin:0">Waiting for camera...</p>
+      <canvas id="cameraCanvas" hidden></canvas>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="captureBtn" type="button">📸 Capture</button>
+        <button class="btn btn-ghost" id="closeCameraBtn" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=8"></script>
+</body>
+</html>

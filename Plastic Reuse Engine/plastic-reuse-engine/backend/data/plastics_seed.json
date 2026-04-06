@@ -1,0 +1,153 @@
+{
+  "plastics": {
+    "PET": {
+      "full_name": "Polyethylene Terephthalate",
+      "structural_score_base": 45,
+      "heat_resistance": "low",
+      "contamination_sensitivity": "high",
+      "washability_bonus_possible": true,
+      "modular_block_suitability": "poor",
+      "decorative_suitability": "moderate",
+      "filament_suitability": "moderate",
+      "default_recommended_use": "decorative_piece",
+      "warnings": [
+        "PET degrades with repeated heat exposure",
+        "Not suitable for food-contact reuse without certified processing",
+        "Structural integrity decreases significantly after contamination"
+      ],
+      "allowed_processes": ["sorting", "washing", "shredding", "decorative_molding"],
+      "notes": "Common in bottles and food packaging. Moderate candidate for decorative or non-structural reuse."
+    },
+    "HDPE": {
+      "full_name": "High-Density Polyethylene",
+      "structural_score_base": 72,
+      "heat_resistance": "moderate",
+      "contamination_sensitivity": "low",
+      "washability_bonus_possible": true,
+      "modular_block_suitability": "good",
+      "decorative_suitability": "good",
+      "filament_suitability": "moderate",
+      "default_recommended_use": "modular_block",
+      "warnings": [
+        "Not suitable for food-contact reuse without certified processing",
+        "Structural reliability not guaranteed for load-bearing applications"
+      ],
+      "allowed_processes": ["sorting", "washing", "shredding", "low_risk_remolding", "compression_molding"],
+      "notes": "One of the more suitable plastics for simple reuse scenarios. Found in detergent bottles, milk jugs, and caps."
+    },
+    "PVC": {
+      "full_name": "Polyvinyl Chloride",
+      "structural_score_base": 20,
+      "heat_resistance": "low",
+      "contamination_sensitivity": "high",
+      "washability_bonus_possible": false,
+      "modular_block_suitability": "very_poor",
+      "decorative_suitability": "poor",
+      "filament_suitability": "very_poor",
+      "default_recommended_use": "experimental_prototype",
+      "warnings": [
+        "PVC releases toxic chlorine compounds when heated or burned",
+        "Not recommended for any heat-based reuse process",
+        "Requires specialized handling and disposal",
+        "Not suitable for child-safe applications",
+        "Avoid mixing with other plastics in reuse streams"
+      ],
+      "allowed_processes": ["sorting", "cold_forming_only"],
+      "notes": "High caution material. Generally not recommended for reuse in most scenarios due to chemical hazards."
+    },
+    "LDPE": {
+      "full_name": "Low-Density Polyethylene",
+      "structural_score_base": 40,
+      "heat_resistance": "low",
+      "contamination_sensitivity": "moderate",
+      "washability_bonus_possible": true,
+      "modular_block_suitability": "poor",
+      "decorative_suitability": "moderate",
+      "filament_suitability": "poor",
+      "default_recommended_use": "non_structural_panel",
+      "warnings": [
+        "Low structural strength limits load-bearing applications",
+        "Melts at relatively low temperatures",
+        "Not suitable for structural or safety-critical reuse"
+      ],
+      "allowed_processes": ["sorting", "washing", "shredding", "sheet_pressing"],
+      "notes": "Flexible plastic found in bags and films. Limited structural value but can be pressed into sheets."
+    },
+    "PP": {
+      "full_name": "Polypropylene",
+      "structural_score_base": 65,
+      "heat_resistance": "moderate",
+      "contamination_sensitivity": "moderate",
+      "washability_bonus_possible": true,
+      "modular_block_suitability": "moderate",
+      "decorative_suitability": "good",
+      "filament_suitability": "moderate",
+      "default_recommended_use": "modular_block",
+      "warnings": [
+        "Not suitable for food-contact reuse without certified processing",
+        "Structural reliability not guaranteed for load-bearing applications"
+      ],
+      "allowed_processes": ["sorting", "washing", "shredding", "low_risk_remolding", "injection_prototype"],
+      "notes": "Decent candidate for lightweight, non-critical reuse. Common in caps, containers, and packaging."
+    },
+    "PS": {
+      "full_name": "Polystyrene",
+      "structural_score_base": 25,
+      "heat_resistance": "very_low",
+      "contamination_sensitivity": "high",
+      "washability_bonus_possible": false,
+      "modular_block_suitability": "very_poor",
+      "decorative_suitability": "poor",
+      "filament_suitability": "very_poor",
+      "default_recommended_use": "experimental_prototype",
+      "warnings": [
+        "PS is brittle and fractures easily under stress",
+        "Releases styrene vapors when heated — requires ventilation",
+        "Not suitable for structural applications",
+        "Not recommended for child-safe applications",
+        "Expanded PS (foam) has very limited reuse value"
+      ],
+      "allowed_processes": ["sorting", "cold_compaction", "experimental_only"],
+      "notes": "Brittle material with limited reuse potential. High caution for any heat-based processing."
+    },
+    "OTHER": {
+      "full_name": "Other / Mixed Plastic",
+      "structural_score_base": 30,
+      "heat_resistance": "unknown",
+      "contamination_sensitivity": "high",
+      "washability_bonus_possible": true,
+      "modular_block_suitability": "poor",
+      "decorative_suitability": "poor",
+      "filament_suitability": "very_poor",
+      "default_recommended_use": "experimental_prototype",
+      "warnings": [
+        "Mixed or unidentified plastic composition increases processing risk",
+        "Unknown chemical additives may be present",
+        "Not suitable for food-contact or child-safe applications",
+        "Blending with known plastics not recommended without testing"
+      ],
+      "allowed_processes": ["sorting", "experimental_only"],
+      "notes": "Category 7 or unclassified plastics. Conservative scoring applies due to unknown composition."
+    },
+    "UNKNOWN": {
+      "full_name": "Unknown Plastic Type",
+      "structural_score_base": 20,
+      "heat_resistance": "unknown",
+      "contamination_sensitivity": "very_high",
+      "washability_bonus_possible": false,
+      "modular_block_suitability": "very_poor",
+      "decorative_suitability": "very_poor",
+      "filament_suitability": "very_poor",
+      "default_recommended_use": "experimental_prototype",
+      "warnings": [
+        "Plastic type is unknown — all assessments are highly conservative",
+        "Do not apply heat without material identification",
+        "Unknown polymer composition significantly increases uncertainty",
+        "Not suitable for any safety-critical application",
+        "Material identification recommended before any reuse attempt"
+      ],
+      "allowed_processes": ["sorting", "visual_identification_first"],
+      "notes": "Unknown plastic type. Identification is strongly recommended before any reuse decision."
+    }
+  }
+}

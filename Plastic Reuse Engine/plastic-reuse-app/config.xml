@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.plasticreuse.engine" version="1.0.0"
+  xmlns="http://www.w3.org/ns/widgets"
+  xmlns:cdv="http://cordova.apache.org/ns/1.0"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <name>Plastic Reuse Engine</name>
+  <description>Evaluate whether plastic waste may be reused for modular or non-structural applications.</description>
+  <author email="dev@plasticreuse.app" href="">Plastic Reuse Engine</author>
+
+  <content src="index.html" />
+
+  <!-- Network access -->
+  <access origin="*" />
+  <allow-intent href="http://*/*" />
+  <allow-intent href="https://*/*" />
+  <allow-navigation href="*" />
+  <access origin="https://tfhub.dev" />
+  <access origin="https://storage.googleapis.com" />
+
+  <!-- Android settings -->
+  <platform name="android">
+    <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/screen/android/splashscreen.png" />
+    <preference name="android-minSdkVersion" value="24" />
+    <preference name="android-targetSdkVersion" value="34" />
+    <!-- Allow cleartext for local backend during development -->
+    <edit-config file="app/src/main/AndroidManifest.xml" mode="merge" target="/manifest/application">
+      <application android:usesCleartextTraffic="true" />
+    </edit-config>
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+  </platform>
+
+  <preference name="DisallowOverscroll" value="true" />
+  <preference name="Fullscreen" value="false" />
+  <preference name="StatusBarOverlaysWebView" value="false" />
+
+</widget>
