@@ -6,10 +6,10 @@
 
 let gemmaReady = false;
 
-const SYSTEM_PROMPT = `You are a plastic waste reuse expert assistant in the Plastic Reuse Engine app.
-Help users understand how to reuse plastic waste based on analysis results.
-Be concise, practical, and encouraging. Always prioritize safety.
-Respond in the same language the user writes in.`;
+const SYSTEM_PROMPT = `Eres un experto en reciclaje y reutilización de plásticos en la app Plastic Reuse Engine.
+Ayuda al usuario a entender cómo reutilizar el plástico detectado de forma segura y creativa.
+Responde SIEMPRE en español, de forma breve (máximo 3 oraciones), práctica y amigable.
+Prioriza la seguridad. Si el usuario pregunta algo fuera de reciclaje, redirige amablemente al tema.`;
 
 // ---- Initialize ----
 async function initGemma() {
@@ -149,34 +149,28 @@ async function generateGemmaResponse(analysisResult, userQuestion = null) {
   return { text, source: 'rules' };
 }
 
-// ---- Rule-based fallback ----
+// ---- Rule-based fallback (usa knowledge_base.js) ----
 function buildFallbackResponse(r, userQuestion) {
-  const type = r.request_summary.plastic_type;
-  const score = r.reuse_score;
-  const verdict = r.verdict;
-
-  const TIPS = {
-    PET:  "PET bottles work great as planters, bird feeders, or storage containers.",
-    HDPE: "HDPE is one of the safest plastics to reuse — ideal for outdoor furniture or modular blocks.",
-    PP:   "PP is heat-resistant and works well as organizers or small planters.",
-    PS:   "PS is brittle — lightweight decorative uses only. Never apply heat.",
-    LDPE: "LDPE bags can be fused with an iron to create thicker craft sheets.",
-    PVC:  "PVC needs special handling. Cold-forming only — never apply heat.",
-    OTHER: "Mixed plastics are best for experimental prototypes or art projects.",
-    UNKNOWN: "Identify the plastic type first. Look for the recycling symbol on the item.",
-  };
+  const type = (r && r.request_summary && r.request_summary.plastic_type) || 'UNKNOWN';
+  const score = (r && r.reuse_score) || '—';
+  const verdict = (r && r.verdict) || '';
 
   const VERDICTS = {
-    GOOD_CANDIDATE: "Great news — this plastic scores well for reuse.",
-    CONDITIONAL_REUSE: "This plastic can be reused with some preparation.",
-    LIMITED_REUSE: "Reuse options are limited but possible for low-risk applications.",
-    REJECTED: "This item is not recommended for reuse in its current state.",
+    GOOD_CANDIDATE:    'Excelente — este plástico tiene buen potencial de reutilización.',
+    CONDITIONAL_REUSE: 'Este plástico puede reutilizarse con algo de preparación previa.',
+    LIMITED_REUSE:     'Las opciones de reutilización son limitadas; úsalo en aplicaciones de bajo riesgo.',
+    REJECTED:          'No se recomienda reutilizar este artículo en su estado actual.',
   };
 
+  // Con pregunta: respuesta contextual desde la KB
   if (userQuestion) {
-    return `Based on the analysis (${type}, score ${score}/100): ${TIPS[type] || "Consider experimental reuse only."} Always clean thoroughly before reuse.`;
+    return matchKB(type, userQuestion);
   }
-  return `${VERDICTS[verdict] || ""} Score: ${score}/100. ${TIPS[type] || ""} ${score < 50 ? "Consider cleaning or finding a recycling center." : "Clean thoroughly before starting your project."}`;
+
+  // Sin pregunta: resumen general + tip rotativo
+  const tip = matchKB(type, '');
+  const verdict_es = VERDICTS[verdict] || '';
+  return `${verdict_es} Puntuación: ${score}/100. ${tip}`;
 }
 
 // ---- Chat history & render ----
