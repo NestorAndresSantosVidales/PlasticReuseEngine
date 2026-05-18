@@ -418,6 +418,7 @@ form.addEventListener("submit", async (e) => {
     renderHistory();
     resultsSection.hidden = false;
     resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    showVoiceFab(); // mostrar botón flotante Preguntar
 
     // Activate Gemma chat and generate initial insight
     const gemmaSection = document.getElementById('gemmaSection');
@@ -487,6 +488,8 @@ newAnalysisBtn.addEventListener("click", () => {
   resultsSection.hidden = true;
   aiResultBanner.hidden = true;
   lastResult = null;
+  hideVoiceFab(); // ocultar botón flotante al limpiar
+  closeVoiceAsk(); // cerrar panel de voz si está abierto
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
@@ -528,6 +531,7 @@ function renderHistory() {
       renderResult(entry.full);
       resultsSection.hidden = false;
       resultsSection.scrollIntoView({ behavior: "smooth" });
+      showVoiceFab(); // mostrar botón flotante al cargar desde historial
     });
     historyList.appendChild(li);
   });
@@ -576,3 +580,378 @@ if (gemmaInput) {
 
 // Init Gemma in background
 initGemma().catch(() => {});
+
+/* ================================================================
+   MÓDULO: Botón Preguntar — Conversación por Voz sobre Plástico
+   ================================================================
+   Flujo multi-turno 100 % offline:
+     1. Usuario toca "🎙️ Preguntar" → panel aparece, mic se activa automáticamente
+     2. STT escucha la pregunta (Web Speech API / Cordova plugin)
+     3. Transcripción → askGemma(lastResult, pregunta) → Gemma local o reglas
+     4. Respuesta → burbuja en pantalla + TTS la lee en voz alta
+     5. Después de TTS → mic se reactiva solo para siguiente pregunta
+     6. El usuario puede cerrar en cualquier momento
+   ================================================================ */
+
+// ---- Estado del módulo ----
+let _vaActive     = false;  // panel abierto
+let _vaListening  = false;  // mic activo
+let _vaSpeaking   = false;  // TTS activo
+let _vaThinking   = false;  // esperando respuesta de Gemma
+let _vaRecognition = null;  // instancia SpeechRecognition activa
+
+const VOICE_ASK_LANG = 'es-ES';
+
+// ---- Refs DOM ----
+const _vaPanel      = () => document.getElementById('voiceAskPanel');
+const _vaHistory    = () => document.getElementById('voiceAskHistory');
+const _vaStatus     = () => document.getElementById('voiceAskStatus');
+const _vaMicBtn     = () => document.getElementById('voiceAskMicBtn');
+const _vaMicHint    = () => document.getElementById('voiceAskMicHint');
+const _vaWaves      = () => document.getElementById('voiceAskWaves');
+const _vaAvatarIcon = () => document.getElementById('voiceAskAvatarIcon');
+const _vaBtn        = () => document.getElementById('voiceAskBtn');
+
+// ---- Abrir panel ----
+function openVoiceAsk() {
+  if (!lastResult) return;  // sin análisis no hay contexto
+
+  const panel = _vaPanel();
+  if (!panel) return;
+
+  _vaActive = true;
+  panel.hidden = false;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Bienvenida inicial del asistente
+  const tipo = lastResult.request_summary?.plastic_type || 'plástico';
+  const score = lastResult.reuse_score ?? '—';
+  const welcome = `Hola. Detecté ${tipo} con puntuación ${score}/100. ¿Tienes alguna pregunta sobre cómo reutilizarlo o reciclarlo?`;
+  _vaAddAiMsg(welcome);
+  _vaSetStatus('Leyendo resultado...', 'speaking');
+  _vaShowWaves(true);
+  _vaDisableMic(true);
+
+  // Leer bienvenida en voz alta, luego activar mic automáticamente
+  _vaSpeakAndThen(welcome, () => {
+    _vaShowWaves(false);
+    if (_vaActive) _vaStartListening();
+  });
+}
+
+// ---- Cerrar panel ----
+function closeVoiceAsk() {
+  _vaActive = false;
+  _vaStopListening();
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  if (window.TTS) { try { TTS.stop(); } catch(e) {} }
+  _vaShowWaves(false);
+  const panel = _vaPanel();
+  if (panel) panel.hidden = true;
+  // Reset botón trigger
+  const btn = _vaBtn();
+  if (btn) btn.disabled = false;
+}
+
+// ---- Iniciar escucha ----
+function _vaStartListening() {
+  if (!_vaActive || _vaListening || _vaSpeaking || _vaThinking) return;
+  _vaListening = true;
+  _vaSetStatus('🎙️ Escuchando...', 'listening');
+  _vaDisableMic(false);
+  const micBtn = _vaMicBtn();
+  if (micBtn) micBtn.classList.add('is-listening');
+  const micHint = _vaMicHint();
+  if (micHint) { micHint.textContent = 'Escuchando — toca para detener'; micHint.classList.add('active'); }
+
+  // ── Cordova Speech Recognition plugin ──
+  if (window.plugins && window.plugins.speechRecognition) {
+    window.plugins.speechRecognition.startListening(
+      (matches) => {
+        _vaListening = false;
+        const transcript = matches && matches[0] ? matches[0] : '';
+        if (transcript) _vaHandleTranscript(transcript);
+        else if (_vaActive) setTimeout(() => _vaStartListening(), 600);
+      },
+      (err) => {
+        console.warn('[VoiceAsk] STT error:', err);
+        _vaListening = false;
+        if (_vaActive) {
+          _vaSetStatus('No se entendió. Intenta de nuevo.', '');
+          setTimeout(() => { if (_vaActive) _vaStartListening(); }, 1200);
+        }
+      },
+      { language: VOICE_ASK_LANG, matches: 1, showPopup: false }
+    );
+    return;
+  }
+
+  // ── Web Speech API (navegador / WebView) ──
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    _vaSetStatus('Reconocimiento de voz no disponible', '');
+    _vaListening = false;
+    return;
+  }
+
+  const rec = new SR();
+  _vaRecognition = rec;
+  rec.lang = VOICE_ASK_LANG;
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+  rec.continuous = false;
+
+  rec.onresult = (event) => {
+    _vaListening = false;
+    _vaRecognition = null;
+    const transcript = event.results[0][0].transcript;
+    if (transcript) _vaHandleTranscript(transcript);
+    else if (_vaActive) setTimeout(() => _vaStartListening(), 600);
+  };
+
+  rec.onerror = (e) => {
+    _vaListening = false;
+    _vaRecognition = null;
+    if (!_vaActive) return;
+    const msg = e.error === 'no-speech'
+      ? 'No escuché nada. Intenta de nuevo.'
+      : e.error === 'not-allowed'
+        ? 'Permiso de micrófono denegado.'
+        : 'Error de micrófono. Toca para intentar de nuevo.';
+    _vaSetStatus(msg, '');
+    _vaDisableMic(false);
+    const micBtn = _vaMicBtn();
+    if (micBtn) micBtn.classList.remove('is-listening');
+    const micHint = _vaMicHint();
+    if (micHint) { micHint.textContent = 'Toca para hablar'; micHint.classList.remove('active'); }
+  };
+
+  rec.onend = () => {
+    if (_vaListening) {
+      // Terminó sin resultado — puede pasar en Android
+      _vaListening = false;
+      _vaRecognition = null;
+      const micBtn = _vaMicBtn();
+      if (micBtn) micBtn.classList.remove('is-listening');
+      const micHint = _vaMicHint();
+      if (micHint) { micHint.textContent = 'Toca para hablar'; micHint.classList.remove('active'); }
+      if (_vaActive) _vaSetStatus('Toca el micrófono para hablar', '');
+    }
+  };
+
+  try { rec.start(); } catch(e) { _vaListening = false; }
+}
+
+// ---- Detener escucha ----
+function _vaStopListening() {
+  _vaListening = false;
+  if (_vaRecognition) { try { _vaRecognition.stop(); } catch(e) {} _vaRecognition = null; }
+  const micBtn = _vaMicBtn();
+  if (micBtn) micBtn.classList.remove('is-listening');
+  const micHint = _vaMicHint();
+  if (micHint) { micHint.textContent = 'Toca para hablar'; micHint.classList.remove('active'); }
+  if (window.plugins && window.plugins.speechRecognition) {
+    try { window.plugins.speechRecognition.stopListening(() => {}, () => {}); } catch(e) {}
+  }
+}
+
+// ---- Procesar transcripción ----
+async function _vaHandleTranscript(transcript) {
+  if (!_vaActive || !lastResult) return;
+
+  // Mostrar mensaje del usuario
+  _vaAddUserMsg(transcript);
+  _vaSetStatus('🤔 Pensando...', 'thinking');
+  _vaThinking = true;
+  _vaDisableMic(true);
+  _vaShowWaves(false);
+
+  // Indicador de escritura (typing dots)
+  const typingEl = _vaAddTypingIndicator();
+
+  // Llamar a Gemma (o reglas fallback)
+  let responseText = '';
+  try {
+    const result = await askGemma(lastResult, transcript);
+    responseText = result && result.text ? result.text : _vaFallbackResponse(transcript);
+  } catch(e) {
+    responseText = _vaFallbackResponse(transcript);
+  }
+  _vaThinking = false;
+
+  // Quitar typing indicator y mostrar respuesta
+  if (typingEl && typingEl.parentNode) typingEl.parentNode.removeChild(typingEl);
+  _vaAddAiMsg(responseText);
+
+  // TTS
+  _vaSetStatus('🔊 Respondiendo...', 'speaking');
+  _vaShowWaves(true);
+  await _vaSpeakAndThen(responseText, () => {
+    _vaShowWaves(false);
+    // Reactivar mic automáticamente para siguiente pregunta
+    if (_vaActive) {
+      _vaSetStatus('¿Tienes otra pregunta?', '');
+      setTimeout(() => { if (_vaActive) _vaStartListening(); }, 700);
+    }
+  });
+}
+
+// ---- TTS con callback al terminar ----
+function _vaSpeakAndThen(text, onDone) {
+  _vaSpeaking = true;
+  if (window.TTS) {
+    TTS.speak(
+      { text, locale: VOICE_ASK_LANG, rate: 0.9 },
+      () => { _vaSpeaking = false; onDone && onDone(); },
+      () => { _vaSpeaking = false; onDone && onDone(); }
+    );
+    return;
+  }
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = VOICE_ASK_LANG;
+    utt.rate = 0.92;
+    utt.pitch = 1.0;
+    utt.onend  = () => { _vaSpeaking = false; onDone && onDone(); };
+    utt.onerror = () => { _vaSpeaking = false; onDone && onDone(); };
+    window.speechSynthesis.speak(utt);
+    return;
+  }
+  // Sin TTS disponible
+  _vaSpeaking = false;
+  onDone && onDone();
+}
+
+// ---- Respuesta fallback cuando Gemma no está disponible ----
+function _vaFallbackResponse(question) {
+  if (!lastResult) return 'No tengo datos del análisis. Por favor, realiza un análisis primero.';
+  const tipo = lastResult.request_summary?.plastic_type || 'este plástico';
+  const score = lastResult.reuse_score ?? '—';
+  const tips = {
+    PET:  'Las botellas PET son ideales para hacer macetas, comederos para pájaros o almacenaje de granos.',
+    HDPE: 'El HDPE es muy seguro para reutilizar. Puedes hacer muebles de exterior o bloques modulares.',
+    PP:   'El PP resiste el calor. Es ideal para organizadores, pequeñas macetas o recipientes.',
+    PS:   'El PS es frágil. Úsalo solo para decoración ligera y nunca lo calientes.',
+    LDPE: 'Las bolsas LDPE se pueden fusionar con plancha para crear láminas reutilizables.',
+    PVC:  'El PVC requiere manejo especial. Solo formado en frío, nunca apliques calor directo.',
+    OTHER: 'Para plásticos mixtos considera proyectos de arte o prototipos experimentales.',
+    UNKNOWN: 'Primero identifica el tipo de plástico buscando el símbolo de reciclaje en el envase.',
+  };
+  const tip = tips[tipo] || 'Limpia bien el plástico antes de cualquier proyecto de reutilización.';
+  return `Sobre este ${tipo} (puntuación ${score}/100): ${tip} Recuerda lavarlo bien antes de usarlo.`;
+}
+
+// ---- Helpers de UI ----
+function _vaAddUserMsg(text) {
+  const history = _vaHistory();
+  if (!history) return;
+  const div = document.createElement('div');
+  div.className = 'va-msg va-msg-user';
+  div.innerHTML = `<div class="va-role-label">Tú</div><div class="va-bubble">${_vaEscape(text)}</div>`;
+  history.appendChild(div);
+  history.scrollTop = history.scrollHeight;
+}
+
+function _vaAddAiMsg(text) {
+  const history = _vaHistory();
+  if (!history) return;
+  const div = document.createElement('div');
+  div.className = 'va-msg va-msg-ai';
+  div.innerHTML = `<div class="va-role-label">Asistente</div><div class="va-bubble">${_vaEscape(text)}</div>`;
+  history.appendChild(div);
+  history.scrollTop = history.scrollHeight;
+}
+
+function _vaAddTypingIndicator() {
+  const history = _vaHistory();
+  if (!history) return null;
+  const div = document.createElement('div');
+  div.className = 'va-msg va-msg-ai va-typing';
+  div.innerHTML = `<div class="va-role-label">Asistente</div><div class="va-bubble"><span class="va-typing-dot"></span><span class="va-typing-dot"></span><span class="va-typing-dot"></span></div>`;
+  history.appendChild(div);
+  history.scrollTop = history.scrollHeight;
+  return div;
+}
+
+function _vaSetStatus(text, state) {
+  const el = _vaStatus();
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'voice-ask-status' + (state ? ' ' + state : '');
+}
+
+function _vaShowWaves(show) {
+  const waves = _vaWaves();
+  const icon  = _vaAvatarIcon();
+  if (waves) waves.hidden = !show;
+  if (icon)  icon.style.opacity = show ? '0' : '1';
+}
+
+function _vaDisableMic(disabled) {
+  const btn = _vaMicBtn();
+  if (btn) btn.disabled = disabled;
+}
+
+function _vaEscape(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ---- FAB helpers ----
+function showVoiceFab() {
+  const fab = document.getElementById('voiceFab');
+  if (fab) fab.hidden = false;
+}
+function hideVoiceFab() {
+  const fab = document.getElementById('voiceFab');
+  if (fab) fab.hidden = true;
+}
+
+// ---- Eventos de los botones ----
+document.addEventListener('DOMContentLoaded', () => {
+  const voiceAskBtn   = document.getElementById('voiceAskBtn');
+  const voiceAskClose = document.getElementById('voiceAskCloseBtn');
+  const voiceAskMic   = document.getElementById('voiceAskMicBtn');
+  const voiceFab      = document.getElementById('voiceFab');
+
+  // Botón Preguntar dentro de la sección de resultados
+  if (voiceAskBtn) {
+    voiceAskBtn.addEventListener('click', () => {
+      if (!lastResult) { alert('Primero realiza un análisis de plástico.'); return; }
+      openVoiceAsk();
+    });
+  }
+
+  // Botón flotante (FAB) — visible siempre que haya un lastResult
+  if (voiceFab) {
+    voiceFab.addEventListener('click', () => {
+      if (!lastResult) { alert('Primero realiza un análisis de plástico.'); return; }
+      // Scroll a la sección de resultados si no está visible
+      const panel = document.getElementById('voiceAskPanel');
+      if (panel) {
+        resultsSection.hidden = false;
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => openVoiceAsk(), 350); // pequeño delay para que el scroll termine
+      } else {
+        openVoiceAsk();
+      }
+    });
+  }
+
+  // Cerrar panel de voz
+  if (voiceAskClose) {
+    voiceAskClose.addEventListener('click', closeVoiceAsk);
+  }
+
+  // Toggle micrófono
+  if (voiceAskMic) {
+    voiceAskMic.addEventListener('click', () => {
+      if (_vaListening) {
+        _vaStopListening();
+        _vaSetStatus('Micrófono detenido. Toca para hablar.', '');
+      } else if (!_vaThinking && !_vaSpeaking) {
+        _vaStartListening();
+      }
+    });
+  }
+});
